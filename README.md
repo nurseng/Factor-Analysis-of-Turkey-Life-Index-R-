@@ -1,0 +1,1 @@
+# Factor-Analysis-of-Turkey-Life-Index-R-
