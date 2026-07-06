@@ -1,0 +1,181 @@
+---
+title: "179 Final Assignment"
+author: "GOKBULUT Halime Nursen"
+date: "2025-12-16"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, echo=TRUE, message=FALSE, warning=FALSE}
+
+###################################################
+# YAŞAM ENDEKSİ 2015 – FAKTÖR ANALİZİ (TÜİK) LIFE INDEX (2015) – FACTOR ANALYSIS (TURKSTAT)
+###################################################
+
+### 0) Temizlik
+rm(list = ls())
+cat("\014")
+
+### 1) Paketler (Required packages)
+pkgs <- c("readxl", "psych", "dplyr", "writexl")
+new <- pkgs[!(pkgs %in% installed.packages()[,"Package"])]
+if(length(new)>0) install.packages(new)
+
+library(readxl)
+library(psych)
+library(dplyr)
+library(writexl)
+
+### 2) Dosya yolu (Set working directory)
+setwd("~/Desktop")
+file <- "yasam_endeksi_2015.xls"
+
+### 3) Excel oku (doğru sheet!)
+raw <- read_excel(file, sheet = "t2", col_names = FALSE)
+
+### 4) Üstteki başlıkları at (Remove header rows)
+# Gerçek veriler 6. satırdan itibaren başlıyor (Actual data start from row 6)
+data <- raw[6:nrow(raw), ]
+
+### 5) Sütun isimleri (Assign column names)
+colnames(data) <- as.character(unlist(raw[5, ]))
+
+### 6) İl adını ayır (Separate province names)
+province <- data[[1]]
+dat <- data[, -1]
+
+### 7) Sütun isimlerini temizle (Clean column names)
+names(dat) <- make.names(names(dat), unique = TRUE)
+
+### 8) Sayısala çevir (Convert variables to numeric)
+dat <- dat %>% mutate(across(everything(), ~ as.numeric(.)))
+
+### 9) Tamamen boş sütunları sil (Remove columns with all missing values)
+dat <- dat[, colSums(!is.na(dat)) > 0]
+
+### 10) Eksik değerleri median ile doldur (Impute missing values using the median)
+dat <- dat %>%
+  mutate(across(everything(),
+                ~ ifelse(is.na(.), median(., na.rm = TRUE), .)))
+
+
+# İl adlarını temizle (NA ve başlık satırını kaldır) (Clean province names (remove NA and repeated header rows))
+province_clean <- province[!is.na(province) & province != "Il/Province"]
+
+# Datayı da aynı satırlara indir (Keep corresponding rows in the data)
+dat <- dat[!is.na(province) & province != "Il/Province", ]
+
+# Rowname ata
+rownames(dat) <- province_clean
+
+
+###################################################
+# FAKTÖR ANALİZİNE UYGUNLUK (SUITABILITY FOR FACTOR ANALYSIS)
+###################################################
+
+cat("KMO SONUCU\n")
+print(KMO(dat))
+
+cat("\nBARTLETT TESTİ\n")
+print(cortest.bartlett(cor(dat), n = nrow(dat)))
+# Faktör analizinde kullanılacak veri (Data to be used in factor analysis)
+X <- dat
+
+
+###################################################
+# FAKTÖR SAYISI (NUMBER OF FACTORS)
+###################################################
+
+set.seed(123)
+fa.parallel(X, fa = "fa", n.iter = 100)
+
+# 3 faktör ile devam ediyoruz (A three-factor solution )
+nf <- 3
+
+###################################################
+# FAKTÖR ANALİZİ (FACTOR ANALYSIS)
+###################################################
+
+fa_res <- fa(dat, nfactors = nf, rotate = "varimax", fm = "ml")
+
+cat("\nFAKTÖR YÜKLERİ (|0.30| üstü)\n")
+print(fa_res$loadings, cutoff = 0.30)
+
+###################################################
+# FAKTÖR SKORLARI (FACTOR SCORES)
+###################################################
+
+scores <- as.data.frame(fa_res$scores)
+scores$Province <- rownames(dat)
+names(scores) <- c("Factor1","Factor2","Factor3","Province")
+
+###################################################
+# SONUÇLARI KAYDET (SAVE RESULTS)
+###################################################
+
+loadings_df <- as.data.frame(unclass(fa_res$loadings))
+loadings_df$Variable <- rownames(loadings_df)
+
+write_xlsx(
+  list(
+    "Clean_Data" = dat,
+    "Factor_Loadings" = loadings_df,
+    "Factor_Scores" = scores
+  ),
+  "yasam_endeksi_2015_factor_results.xlsx"
+)
+
+cat("\n COMPLETED!\nDesktop'a 'yasam_endeksi_2015_factor_results.xlsx' kaydedildi.\n")
+
+```
+
+
+## Factor Analysis of the Life Index (2015)
+
+## Suitability of the Data for Factor Analysis
+
+Before conducting factor analysis, the suitability of the data set was examined using the Kaiser–Meyer–Olkin (KMO) measure of sampling adequacy and Bartlett’s Test of Sphericity.
+The KMO value was found to be 0.78, which exceeds the commonly accepted threshold of 0.60. This result indicates that the sample size and correlation structure of the variables are adequate for factor analysis.
+Bartlett’s Test of Sphericity was statistically significant (p < 0.001), rejecting the null hypothesis that the correlation matrix is an identity matrix. This confirms the presence of sufficient correlations among variables and supports the application of factor analysis.
+
+## Determination of the Number of Factors
+
+To determine the appropriate number of factors, a parallel analysis was conducted. The results suggested the extraction of four factors. However, considering the cumulative variance explained, factor interpretability, and parsimony principles commonly applied in social sciences, a three-factor solution was retained.
+The three-factor model provides a clear and meaningful structure while explaining a substantial proportion of the total variance.
+
+## Factor Extraction and Rotation
+
+Factor analysis was performed using the maximum likelihood estimation method, and Varimax rotation was applied to enhance interpretability by achieving a simpler and more distinct factor structure.
+The three extracted factors together explain approximately 55% of the total variance, which is considered acceptable and adequate in social science research.
+
+## Interpretation of Factors
+
+**Factor 1: Socio-Economic Living Conditions**
+
+The first factor shows high loadings on variables related to housing conditions, income and wealth, education, safety, and overall life satisfaction. These variables collectively reflect the economic and material foundations of quality of life.
+Therefore, the first factor is interpreted as “Socio-Economic Living Conditions.”
+
+**Factor 2: Environmental and Social Infrastructure**
+
+The second factor is primarily associated with variables related to environmental quality, social life, and access to infrastructure services. This factor captures the role of public services, environmental conditions, and social amenities in shaping living standards.
+Accordingly, the second factor is labeled “Environmental and Social Infrastructure.”
+
+**Factor 3: Human Development and Social Participation**
+
+The third factor includes variables such as work life, education, civic engagement, and access to infrastructure. These variables emphasize participation in social and economic life as well as individual development opportunities.
+Thus, the third factor is interpreted as *Human Development and Social Participation.*
+
+### Conclusion
+
+The results of the factor analysis indicate that the Life Index (2015) can be effectively
+summarized using three underlying dimensions. These dimensions capture the socio-economic,
+environmental, and human development aspects of quality of life across provinces.
+
+The findings demonstrate that quality of life is a multidimensional concept shaped not only
+by economic conditions but also by social participation, environmental quality, and access
+to public services.
+
+Overall, the factor analysis provides a statistically sound and theoretically meaningful
+summary of the Life Index indicators, supporting its use in regional quality-of-life
+comparisons and policy-oriented evaluations.
